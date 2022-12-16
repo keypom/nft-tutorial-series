@@ -26,7 +26,7 @@ impl Contract {
         let predecessor = env::predecessor_account_id();
         require!(self.approved_minters.contains(&predecessor), "Not approved minter");
         // Ensure the injected keypom args are not malicious
-        require!(keypom_args.drop_id_field.unwrap() == "mint_id".to_string(), "malicious call. Injected keypom args don't match");
+        require!(keypom_args.drop_id_field.unwrap() == "funder_id".to_string(), "malicious call. Injected keypom args don't match");
         require!(keypom_args.account_id_field.unwrap() == "receiver_id".to_string(), "malicious call. Injected keypom args don't match");
 
 
