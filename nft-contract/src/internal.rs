@@ -65,7 +65,7 @@ pub(crate) fn assert_at_least_one_yocto() {
 }
 
 //refund the initial deposit based on the amount of storage that was used up
-pub(crate) fn refund_deposit(storage_used: u64) {
+pub(crate) fn refund_deposit(storage_used: u64, funder_id: Option<AccountId>) {
     //get how much it would cost to store the information
     let required_cost = env::storage_byte_cost() * Balance::from(storage_used);
     //get the attached deposit
@@ -81,9 +81,12 @@ pub(crate) fn refund_deposit(storage_used: u64) {
     //get the refund amount from the attached deposit - required cost
     let refund = attached_deposit - required_cost;
 
+    // who to refund
+    let refund_account_id = funder_id.unwrap_or_else(|| env::predecessor_account_id());
+
     //if the refund is greater than 1 yocto NEAR, we refund the predecessor that amount
     if refund > 1 {
-        Promise::new(env::predecessor_account_id()).transfer(refund);
+        Promise::new(refund_account_id).transfer(refund);
     }
 }
 
