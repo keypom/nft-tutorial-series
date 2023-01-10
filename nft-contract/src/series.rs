@@ -8,6 +8,7 @@ use crate::*;
 pub struct KeypomArgs {
     pub account_id_field: Option<String>,
     pub drop_id_field: Option<String>,
+    pub funder_id_field: Option<String>,
     pub key_id_field: Option<String>
 }
 
@@ -19,6 +20,7 @@ impl Contract {
         mint_id: Option<u64>,
         metadata: TokenMetadata,
         royalty: Option<HashMap<AccountId, u32>>,
+        skip_refund: Option<bool>,
     ) {
         //measure the initial storage being used on the contract
         let initial_storage_usage = env::storage_usage();
@@ -69,17 +71,23 @@ impl Contract {
         let required_storage_in_bytes = env::storage_usage() - initial_storage_usage;
 
         //refund any excess storage if the user attached too much. Panic if they didn't attach enough to cover the required.
-        refund_deposit(required_storage_in_bytes);
+        if skip_refund.is_none() {
+            refund_deposit(required_storage_in_bytes, None);
+        }
     }
 
     #[payable]
-    pub fn nft_mint(&mut self, mint_id: U64, receiver_id: AccountId, keypom_args: KeypomArgs) {
-        // Ensure the injected keypom args are not malicious
-        require!(keypom_args.drop_id_field.unwrap() == "mint_id".to_string(), "malicious call. Injected keypom args don't match");
-        require!(keypom_args.account_id_field.unwrap() == "receiver_id".to_string(), "malicious call. Injected keypom args don't match");
-
-        //measure the initial storage being used on the contract
-        let initial_storage_usage = env::storage_usage();
+    pub fn nft_mint(
+        &mut self,
+        receiver_id: AccountId,
+        mint_id: Option<U64>,
+        // create series args
+        funder_id: Option<AccountId>,
+        metadata: Option<TokenMetadata>,
+        royalty: Option<HashMap<AccountId, u32>>,
+        // keypom args
+        keypom_args: KeypomArgs,
+    ) {
 
         let predecessor = env::predecessor_account_id();
         assert!(
@@ -87,9 +95,34 @@ impl Contract {
             "Not approved minter"
         );
 
+        // Ensure the injected keypom args are not malicious and creator is approved
+        require!(keypom_args.account_id_field.unwrap() == "receiver_id".to_string(), "malicious call. Injected keypom args don't match");
+
+        //measure the initial storage being used on the contract
+        let initial_storage_usage = env::storage_usage();
+
+        // actual_mint_id is auto generated one AFTER create_series call OR just unwrapped mint_id keypom arg
+        let actual_mint_id;
+        if let Some(metadata) = metadata {
+            // Ensure the injected keypom args are not malicious and creator is approved
+            require!(keypom_args.funder_id_field.unwrap() == "funder_id".to_string(), "malicious call. Injected keypom args don't match");
+            assert!(
+                self.approved_creators.contains(&funder_id.clone().unwrap()),
+                "Not approved creator"
+            );
+            // create the series and skip the refund
+            self.create_series(None, metadata, royalty, Some(true));
+            // the mint_id is the last series created by function call above (same tx so it's atomic)
+            actual_mint_id = self.series_by_id.len();
+        } else {
+            // Ensure the injected keypom args are not malicious and creator is approved
+            require!(keypom_args.drop_id_field.unwrap() == "mint_id".to_string(), "malicious call. Injected keypom args don't match");
+            actual_mint_id = mint_id.unwrap().0;
+        }
+
         let series_id = self
             .series_id_by_mint_id
-            .get(&mint_id.0)
+            .get(&actual_mint_id)
             .expect("No mint_id record found");
         let mut series = self.series_by_id.get(&series_id).expect("Not a series");
         let cur_len = series.tokens.len();
@@ -150,7 +183,7 @@ impl Contract {
         let required_storage_in_bytes = env::storage_usage() - initial_storage_usage;
 
         //refund any excess storage if the user attached too much. Panic if they didn't attach enough to cover the required.
-        refund_deposit(required_storage_in_bytes);
+        refund_deposit(required_storage_in_bytes, funder_id);
     }
 
     #[payable]
