@@ -161,24 +161,13 @@ impl NonFungibleTokenCore for Contract {
                 .series_by_id
                 .get(&token.series_id)
                 .expect("Not a series");
-            let mut metadata = cur_series.metadata;
-
-            let split: Vec<&str> = token_id.split(":").collect();
-            let edition_number = split[1];
-            // If there is a title for the NFT, add the token ID to it.
-            if let Some(title) = metadata.title {
-                metadata.title = Some(format!("{} - {}", title, edition_number));
-            } else {
-                // If there is no title, we simply create one based on the series number and edition number
-                metadata.title = Some(format!("Series {} : Edition {}", split[0], split[1]));
-            }
 
             //we return the JsonToken (wrapped by Some since we return an option)
             Some(JsonToken {
                 series_id: token.series_id,
                 token_id,
                 owner_id: token.owner_id,
-                metadata,
+                metadata: cur_series.metadata,
                 approved_account_ids: token.approved_account_ids,
                 royalty: cur_series.royalty,
             })
